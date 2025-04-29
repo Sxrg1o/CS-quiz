@@ -213,7 +213,7 @@ export default function PoscompQuiz() {
     } else if (!apiKeyMissing) {
       setLoading(true)
       generateQuestions({
-        count: 5,
+        count: 3,
         topic: filters.topic,
         difficulty: filters.difficulty,
       }).then((result) => {
