@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { CheckCircle, XCircle, ChevronRight, BookOpen, Loader2, KeyRound } from "lucide-react"
 import { generateQuestions } from "./actions"
-import type { QuizQuestion } from "@/lib/types"
+import type { AnswerType, QuestionType, QuizQuestion } from "@/lib/types"
 import { Filters, type FilterOptions } from "@/components/filters"
 
 const LoadingState = () => (
@@ -51,8 +51,8 @@ const sampleQuestion: QuizQuestion = {
     "Su complejidad promedio es O(n log n)",
     "Puede ser mejorado con técnicas como la selección de pivote aleatorio",
   ],
-  questionType: "teorica" as any,
-  answerType: "respuesta_unica" as any,
+  questionType: "teorica" as QuestionType,
+  answerType: "respuesta_unica" as AnswerType,
   options: [
     { label: "O(1)", answer: false },
     { label: "O(log n)", answer: false },
@@ -100,7 +100,7 @@ export default function PoscompQuiz() {
 
   useEffect(() => {
     loadQuestions()
-  }, [])
+  },[])
 
   const loadQuestions = async (newFilters?: FilterOptions) => {
     setLoading(true)
@@ -150,14 +150,13 @@ export default function PoscompQuiz() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if(loading) return
       setElapsedTime((prev) => prev + 1)
     }, 1000)
 
     setTimerInterval(interval)
 
     return () => {
-      if (interval) clearInterval(interval)
+      if (timerInterval) clearInterval(interval)
     }
   }, [currentQuestionIndex])
 
