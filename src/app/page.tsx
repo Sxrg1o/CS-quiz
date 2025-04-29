@@ -1,103 +1,393 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import { useState, useEffect } from "react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
+import { CheckCircle, XCircle, ChevronRight, BookOpen, Loader2, KeyRound } from "lucide-react"
+import { generateQuestions } from "./actions"
+import type { QuizQuestion } from "@/lib/types"
+import { Filters, type FilterOptions } from "@/components/filters"
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+const LoadingState = () => (
+  <div className="flex flex-col items-center justify-center p-8 space-y-4">
+    <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+    <p className="text-gray-400">Generando preguntas...</p>
+  </div>
+)
+
+const ApiKeyPrompt = () => (
+  <div className="flex flex-col items-center justify-center p-8 space-y-6 text-center">
+    <KeyRound className="h-12 w-12 text-purple-500" />
+    <h2 className="text-xl font-medium text-gray-200">Se requiere API Key de Google</h2>
+    <p className="text-gray-400 max-w-md">
+      Para generar preguntas, necesitas configurar tu API Key de Google Gemini. Puedes obtener una en{" "}
+      <a
+        href="https://ai.google.dev/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-purple-400 hover:underline"
+      >
+        Google AI Studio
+      </a>
+      .
+    </p>
+    <div className="bg-gray-800 p-4 rounded-md w-full max-w-md">
+      <p className="text-sm text-gray-300 mb-2">Añade la siguiente variable de entorno a tu proyecto:</p>
+      <div className="bg-gray-900 p-2 rounded font-mono text-sm text-gray-300">GOOGLE_API_KEY=tu-api-key</div>
     </div>
-  );
+    <p className="text-sm text-gray-500">
+      Una vez configurada, reinicia la aplicación para comenzar a generar preguntas.
+    </p>
+  </div>
+)
+
+const sampleQuestion: QuizQuestion = {
+  question: "¿Cuál es la complejidad temporal del algoritmo Quicksort en el peor caso?",
+  clues: [
+    "Es un algoritmo de ordenamiento basado en la estrategia divide y vencerás",
+    "Su eficiencia depende de la elección del pivote",
+    "En el peor caso, el pivote siempre es el elemento más pequeño o más grande",
+    "Su complejidad promedio es O(n log n)",
+    "Puede ser mejorado con técnicas como la selección de pivote aleatorio",
+  ],
+  questionType: "teorica" as any,
+  answerType: "respuesta_unica" as any,
+  options: [
+    { label: "O(1)", answer: false },
+    { label: "O(log n)", answer: false },
+    { label: "O(n)", answer: false },
+    { label: "O(n log n)", answer: false },
+    { label: "O(n²)", answer: true },
+  ],
+  metadata: {
+    topic: "Algoritmos y Estructuras de Datos",
+    subtopic: "Algoritmos de ordenamiento",
+    difficulty: 3,
+    tags: ["algoritmos", "ordenamiento", "complejidad", "quicksort"],
+  },
+  summary:
+    "El algoritmo Quicksort tiene una complejidad temporal de O(n²) en el peor caso, que ocurre cuando el pivote elegido siempre es el elemento más pequeño o más grande, resultando en particiones muy desbalanceadas. En este escenario, el algoritmo se comporta similar a un algoritmo de ordenamiento por inserción. Sin embargo, su complejidad promedio es O(n log n), lo que lo hace eficiente en la práctica, especialmente cuando se implementan técnicas como la selección aleatoria del pivote.",
+  references: [
+    {
+      type: "book",
+      citation:
+        "Cormen, T. H., Leiserson, C. E., Rivest, R. L., & Stein, C. (2009). Introduction to Algorithms (3rd ed.). MIT Press.",
+      pages: "170-190",
+    },
+    {
+      type: "article",
+      citation: "Hoare, C. A. R. (1962). Quicksort. The Computer Journal, 5(1), 10-16.",
+      url: "https://doi.org/10.1093/comjnl/5.1.10",
+    },
+  ],
+}
+
+export default function PoscompQuiz() {
+  const [questions, setQuestions] = useState<QuizQuestion[]>([])
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [selectedOption, setSelectedOption] = useState<number | null>(null)
+  const [showResult, setShowResult] = useState(false)
+  const [score, setScore] = useState(0)
+  const [totalAnswered, setTotalAnswered] = useState(0)
+  const [accuracy, setAccuracy] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [apiKeyMissing, setApiKeyMissing] = useState(false)
+  const [filters, setFilters] = useState<FilterOptions>({ topic: null, difficulty: null })
+
+  useEffect(() => {
+    loadQuestions()
+  }, [])
+
+  const loadQuestions = async (newFilters?: FilterOptions) => {
+    setLoading(true)
+    setError(null)
+    setApiKeyMissing(false)
+
+    if (newFilters) {
+      setFilters(newFilters)
+    }
+
+    const currentFilters = newFilters || filters
+
+    try {
+      const result = await generateQuestions({
+        count: 5,
+        topic: currentFilters.topic,
+        difficulty: currentFilters.difficulty,
+      })
+
+      if (result.error) {
+        if (result.error.includes("GOOGLE_API_KEY") || result.error.includes("API key")) {
+          setApiKeyMissing(true)
+          setQuestions([sampleQuestion])
+        } else {
+          setError(result.error)
+        }
+      } else if (result.questions && result.questions.length > 0) {
+        setQuestions(result.questions)
+        setCurrentQuestionIndex(0)
+        setSelectedOption(null)
+        setShowResult(false)
+      } else {
+        setError("No se pudieron generar preguntas")
+      }
+    } catch (e) {
+      setError(`Error al cargar preguntas: ${e}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (totalAnswered > 0) {
+      setAccuracy(Math.round((score / totalAnswered) * 100))
+    }
+  }, [score, totalAnswered])
+
+  const currentQuestion = questions[currentQuestionIndex]
+
+  const handleOptionSelect = (index: number) => {
+    setSelectedOption(index)
+  }
+
+  const handleConfirm = () => {
+    setShowResult(true)
+    setTotalAnswered((prev) => prev + 1)
+
+    if (currentQuestion && selectedOption !== null) {
+      const isCorrect = currentQuestion.options[selectedOption].answer
+      if (isCorrect) {
+        setScore((prev) => prev + 1)
+      }
+    }
+  }
+
+  const handleNextQuestion = () => {
+    if (questions && currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1)
+      setSelectedOption(null)
+      setShowResult(false)
+    } else if (!apiKeyMissing) {
+      setLoading(true)
+      generateQuestions({
+        count: 5,
+        topic: filters.topic,
+        difficulty: filters.difficulty,
+      }).then((result) => {
+        if (result.questions) {
+          const newQuestions = result.questions || [];
+          setQuestions((prev) => [...prev, ...newQuestions])
+        } else {
+          setLoading(false)
+        }
+        setLoading(false)
+        setCurrentQuestionIndex((prev) => prev + 1)
+        setSelectedOption(null)
+        setShowResult(false)
+      })
+    } else {
+      setCurrentQuestionIndex(0)
+      setSelectedOption(null)
+      setShowResult(false)
+    }
+  }
+
+  const handleApplyFilters = (newFilters: FilterOptions) => {
+    loadQuestions(newFilters)
+  }
+
+  if (loading && questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-3xl bg-gray-900 border-gray-800">
+          <CardContent>
+            <LoadingState />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (apiKeyMissing) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-3xl bg-gray-900 border-gray-800">
+          <CardContent>
+            <ApiKeyPrompt />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (error && !apiKeyMissing) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-3xl bg-gray-900 border-gray-800">
+          <CardContent className="p-6">
+            <div className="text-red-400 flex flex-col items-center space-y-4">
+              <XCircle className="h-12 w-12" />
+              <h2 className="text-xl font-medium">Error</h2>
+              <p className="text-center">{error}</p>
+              <Button className="mt-4 bg-purple-700 hover:bg-purple-600" onClick={() => window.location.reload()}>
+                Reintentar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-3xl bg-gray-900 border-gray-800">
+          <CardContent className="p-6">
+            <div className="text-yellow-400 flex flex-col items-center space-y-4">
+              <h2 className="text-xl font-medium">No hay preguntas disponibles</h2>
+              <Button className="mt-4 bg-purple-700 hover:bg-purple-600" onClick={() => window.location.reload()}>
+                Reintentar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const isCorrect = selectedOption !== null && currentQuestion.options[selectedOption].answer
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-3xl bg-gray-900 border-gray-800">
+        {apiKeyMissing && (
+          <div className="bg-yellow-900/30 border-b border-yellow-800 p-3 text-sm text-yellow-300 flex items-center">
+            <KeyRound className="h-4 w-4 mr-2" />
+            <span>
+              Modo demostración: Configura tu{" "}
+              <span className="font-mono bg-yellow-950/50 px-1 rounded">GOOGLE_API_KEY</span> para generar preguntas
+              reales.
+            </span>
+          </div>
+        )}
+
+        <CardHeader className="space-y-2 pb-2">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-purple-400">{currentQuestion.metadata.topic}</h1>
+            <div className="text-sm text-gray-400">
+              Puntaje: {score}/{totalAnswered} | Accuracy: {accuracy}%
+            </div>
+          </div>
+          <h2 className="text-lg font-medium text-gray-300">{currentQuestion.metadata.subtopic}</h2>
+
+          <Filters onApplyFilters={handleApplyFilters} isLoading={loading} />
+
+          <Badge
+            variant="outline"
+            className={`
+              ${currentQuestion.metadata.difficulty <= 2 ? "border-green-600 text-green-400" : ""}
+              ${currentQuestion.metadata.difficulty === 3 ? "border-yellow-600 text-yellow-400" : ""}
+              ${currentQuestion.metadata.difficulty >= 4 ? "border-red-600 text-red-400" : ""}
+            `}
+          >
+            Dificultad: {currentQuestion.metadata.difficulty}/5
+          </Badge>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <div className="text-xl font-medium py-2">{currentQuestion.question}</div>
+
+          <div className="space-y-3">
+            {currentQuestion.options.map((option, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                className={`w-full justify-start text-left h-auto py-3 px-4 transition-all flex items-start ${ 
+                  selectedOption === index
+                    ? "border-purple-500 bg-purple-950/30"
+                    : "border-gray-700 hover:border-gray-500"
+                } ${showResult && option.answer ? "border-green-500 bg-green-950/30" : ""} ${
+                  showResult && selectedOption === index && !option.answer ? "border-red-500 bg-red-950/30" : ""
+                }`}
+                onClick={() => !showResult && handleOptionSelect(index)}
+                disabled={showResult}
+              >
+                <span className="mr-2 flex-shrink-0">{String.fromCharCode(65 + index)}.</span>
+                <span className="flex-1 break-words whitespace-normal">{option.label}</span>
+              </Button>
+            ))}
+          </div>
+
+          {!showResult ? (
+            <Button
+              className="w-full bg-purple-700 hover:bg-purple-600 text-white"
+              disabled={selectedOption === null}
+              onClick={handleConfirm}
+            >
+              Confirmar respuesta
+            </Button>
+          ) : (
+            <div className="space-y-4 animate-fadeIn">
+              <div
+                className={`flex items-center p-4 rounded-md ${
+                  isCorrect ? "bg-green-950/30 text-green-400" : "bg-red-950/30 text-red-400"
+                }`}
+              >
+                {isCorrect ? <CheckCircle className="mr-2 h-5 w-5" /> : <XCircle className="mr-2 h-5 w-5" />}
+                <span className="font-medium">{isCorrect ? "¡Correcto!" : "Incorrecto"}</span>
+              </div>
+
+              <div className="bg-gray-800/50 p-4 rounded-md">
+                <div className="flex items-center mb-2 text-purple-400">
+                  <BookOpen className="mr-2 h-5 w-5" />
+                  <h3 className="font-medium">Explicación</h3>
+                </div>
+                <p className="text-gray-300">{currentQuestion.summary}</p>
+
+                {currentQuestion.references && currentQuestion.references.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-gray-700">
+                    <h4 className="text-sm font-medium text-gray-400 mb-2">Referencias:</h4>
+                    <ul className="text-xs text-gray-500 space-y-1">
+                      {currentQuestion.references.map((ref, index) => (
+                        <li key={index}>
+                          {ref.citation}
+                          {ref.pages && <span> (pp. {ref.pages})</span>}
+                          {ref.url && (
+                            <span>
+                              {" "}
+                              -{" "}
+                              <a
+                                href={ref.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-purple-400 hover:underline"
+                              >
+                                Enlace
+                              </a>
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <Button className="w-full bg-purple-700 hover:bg-purple-600 text-white" onClick={handleNextQuestion}>
+                <span>Siguiente pregunta</span>
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+
+        <CardFooter className="text-xs text-gray-500 pt-2">
+          POSCOMP Quiz - Pregunta #{currentQuestionIndex + 1} de {questions.length}
+        </CardFooter>
+      </Card>
+    </div>
+  )
 }
