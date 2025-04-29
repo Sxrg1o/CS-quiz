@@ -86,7 +86,9 @@ const sampleQuestion: QuizQuestion = {
 export default function PoscompQuiz() {
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [selectedOption, setSelectedOption] = useState<number | null>(null)
+  const [selectedOptions, setSelectedOptions] = useState<number[]>([])
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [score, setScore] = useState(0)
   const [totalAnswered, setTotalAnswered] = useState(0)
@@ -128,7 +130,7 @@ export default function PoscompQuiz() {
       } else if (result.questions && result.questions.length > 0) {
         setQuestions(result.questions)
         setCurrentQuestionIndex(0)
-        setSelectedOption(null)
+        setSelectedOptions([])
         setShowResult(false)
       } else {
         setError("No se pudieron generar preguntas")
@@ -146,28 +148,68 @@ export default function PoscompQuiz() {
     }
   }, [score, totalAnswered])
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if(loading) return
+      setElapsedTime((prev) => prev + 1)
+    }, 1000)
+
+    setTimerInterval(interval)
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [currentQuestionIndex])
+
   const currentQuestion = questions[currentQuestionIndex]
 
   const handleOptionSelect = (index: number) => {
-    setSelectedOption(index)
+    if (currentQuestion.answerType === "respuesta_multiple") {
+      setSelectedOptions((prev) => {
+        if (prev.includes(index)) {
+          return prev.filter((i) => i !== index)
+        } else {
+          return [...prev, index]
+        }
+      })
+    } else {
+      setSelectedOptions([index])
+    }
   }
 
   const handleConfirm = () => {
     setShowResult(true)
     setTotalAnswered((prev) => prev + 1)
 
-    if (currentQuestion && selectedOption !== null) {
-      const isCorrect = currentQuestion.options[selectedOption].answer
-      if (isCorrect) {
-        setScore((prev) => prev + 1)
+    if (currentQuestion && selectedOptions.length > 0) {
+      if (currentQuestion.answerType === "respuesta_multiple") {
+        const correctOptions = currentQuestion.options
+          .map((opt, idx) => (opt.answer ? idx : -1))
+          .filter((idx) => idx !== -1)
+
+        const isCorrect =
+          correctOptions.length === selectedOptions.length &&
+          correctOptions.every((opt) => selectedOptions.includes(opt))
+
+        if (isCorrect) {
+          setScore((prev) => prev + 1)
+        }
+      } else {
+        const selectedIndex = selectedOptions[0]
+        const isCorrect = currentQuestion.options[selectedIndex].answer
+        if (isCorrect) {
+          setScore((prev) => prev + 1)
+        }
       }
     }
   }
 
   const handleNextQuestion = () => {
-    if (questions && currentQuestionIndex < questions.length - 1) {
+    setSelectedOptions([])
+    setElapsedTime(0)
+
+    if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
-      setSelectedOption(null)
       setShowResult(false)
     } else if (!apiKeyMissing) {
       setLoading(true)
@@ -179,17 +221,13 @@ export default function PoscompQuiz() {
         if (result.questions) {
           const newQuestions = result.questions || [];
           setQuestions((prev) => [...prev, ...newQuestions])
-        } else {
-          setLoading(false)
         }
         setLoading(false)
         setCurrentQuestionIndex((prev) => prev + 1)
-        setSelectedOption(null)
         setShowResult(false)
       })
     } else {
       setCurrentQuestionIndex(0)
-      setSelectedOption(null)
       setShowResult(false)
     }
   }
@@ -210,7 +248,7 @@ export default function PoscompQuiz() {
     )
   }
 
-  if (apiKeyMissing) {
+  if (apiKeyMissing && !currentQuestion) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
         <Card className="w-full max-w-3xl bg-gray-900 border-gray-800">
@@ -258,7 +296,18 @@ export default function PoscompQuiz() {
     )
   }
 
-  const isCorrect = selectedOption !== null && currentQuestion.options[selectedOption].answer
+  const isCorrect =
+    currentQuestion.answerType === "respuesta_multiple"
+      ? (() => {
+          const correctOptions = currentQuestion.options
+            .map((opt, idx) => (opt.answer ? idx : -1))
+            .filter((idx) => idx !== -1)
+          return (
+            correctOptions.length === selectedOptions.length &&
+            correctOptions.every((opt) => selectedOptions.includes(opt))
+          )
+        })()
+      : selectedOptions.length > 0 && currentQuestion.options[selectedOptions[0]].answer
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
@@ -284,17 +333,22 @@ export default function PoscompQuiz() {
           <h2 className="text-lg font-medium text-gray-300">{currentQuestion.metadata.subtopic}</h2>
 
           <Filters onApplyFilters={handleApplyFilters} isLoading={loading} />
-
-          <Badge
-            variant="outline"
-            className={`
-              ${currentQuestion.metadata.difficulty <= 2 ? "border-green-600 text-green-400" : ""}
-              ${currentQuestion.metadata.difficulty === 3 ? "border-yellow-600 text-yellow-400" : ""}
-              ${currentQuestion.metadata.difficulty >= 4 ? "border-red-600 text-red-400" : ""}
-            `}
-          >
-            Dificultad: {currentQuestion.metadata.difficulty}/5
-          </Badge>
+          <div className="flex justify-between">
+            <Badge
+              variant="outline"
+              className={`
+                ${currentQuestion.metadata.difficulty <= 2 ? "border-green-600 text-green-400" : ""}
+                ${currentQuestion.metadata.difficulty === 3 ? "border-yellow-600 text-yellow-400" : ""}
+                ${currentQuestion.metadata.difficulty >= 4 ? "border-red-600 text-red-400" : ""}
+              `}
+            >
+              Dificultad: {currentQuestion.metadata.difficulty}/5
+            </Badge>
+            <Badge variant="outline" className="border-blue-600 text-blue-400">
+              Tiempo: {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, "0")}
+            </Badge>
+          </div>
+          
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -306,30 +360,48 @@ export default function PoscompQuiz() {
                 key={index}
                 variant="outline"
                 className={`w-full justify-start text-left h-auto py-3 px-4 transition-all flex items-start ${ 
-                  selectedOption === index
+                  selectedOptions.includes(index)
                     ? "border-purple-500 bg-purple-950/30"
                     : "border-gray-700 hover:border-gray-500"
                 } ${showResult && option.answer ? "border-green-500 bg-green-950/30" : ""} ${
-                  showResult && selectedOption === index && !option.answer ? "border-red-500 bg-red-950/30" : ""
+                  showResult && selectedOptions.includes(index) && !option.answer ? "border-red-500 bg-red-950/30" : ""
                 }`}
                 onClick={() => !showResult && handleOptionSelect(index)}
                 disabled={showResult}
               >
+                {currentQuestion.answerType === "respuesta_multiple" ? (
+                  <div
+                    className={`w-5 h-5 border rounded mr-2 flex items-center justify-center flex-shrink-0 ${ 
+                      selectedOptions.includes(index) ? "bg-purple-500 border-purple-500" : "border-gray-500"
+                    }`}
+                  >
+                    {selectedOptions.includes(index) && <span className="text-white text-xs">✓</span>} 
+                  </div>
+                ) : (
+                  <div
+                    className={`w-5 h-5 border rounded-full mr-2 flex items-center justify-center flex-shrink-0 ${
+                      selectedOptions.includes(index) ? "bg-purple-500 border-purple-500" : "border-gray-500"
+                    }`}
+                  >
+                    {selectedOptions.includes(index) && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                  </div>
+                )}
+
                 <span className="mr-2 flex-shrink-0">{String.fromCharCode(65 + index)}.</span>
                 <span className="flex-1 break-words whitespace-normal">{option.label}</span>
+
               </Button>
             ))}
           </div>
-
           {!showResult ? (
             <Button
               className="w-full bg-purple-700 hover:bg-purple-600 text-white"
-              disabled={selectedOption === null}
+              disabled={selectedOptions.length === 0}
               onClick={handleConfirm}
             >
               Confirmar respuesta
             </Button>
-          ) : (
+          ) :(
             <div className="space-y-4 animate-fadeIn">
               <div
                 className={`flex items-center p-4 rounded-md ${
@@ -384,8 +456,14 @@ export default function PoscompQuiz() {
           )}
         </CardContent>
 
-        <CardFooter className="text-xs text-gray-500 pt-2">
-          POSCOMP Quiz - Pregunta #{currentQuestionIndex + 1} de {questions.length}
+        <CardFooter className="text-xs text-gray-500 pt-2 flex justify-between">
+          <span>
+            POSCOMP Quiz - Pregunta #{currentQuestionIndex + 1} de {questions.length}
+          </span>
+          <span>
+            Tipo: {currentQuestion.questionType.replace(/_/g, " ")} |
+            {currentQuestion.answerType === "respuesta_unica" ? " Respuesta única" : " Respuesta múltiple"}
+          </span>
         </CardFooter>
       </Card>
     </div>
